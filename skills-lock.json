@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "environment-setup-guide": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "c78a32de7924480848e0976cba082901f7a256e90a133a4df2b2593cb9309851"
+    },
+    "gcp-cloud-run": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "834083752ce93902ba050f67a7ce950ea458d2d0df072751f98b5537d1c28c78"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "computedHash": "0a413bf988d06481f69bb81df2070741c3ba12dd9f1be2706d57f259c905992d"
+    }
+  }
+}

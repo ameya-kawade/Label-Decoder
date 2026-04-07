@@ -1,0 +1,60 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+.eslintcache
+.stylelintcache
+node_modules/
+jspm_packages/
+.node_repl_history
+
+# Local Environment & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env*
+.env.sample
+
+# Agent & Planning Directories
+.gemini/
+.openai/
+.planning/
+.agent/cache/
+.agent/logs/
+.agent/temp/
+brain/
+artifacts/
+.system_generated/
+
+# OS Specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Project Settings & Logs
+*.log
+logs/
+*.out/
+.tmp/
+tmp/
+dist/
+build/
+coverage/
+
+# IDE Settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
