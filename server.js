@@ -1,88 +1,254 @@
+/**
+ * server.js — ClearLabel AI Production Server
+ *
+ * Serves the Vite-built static frontend and securely proxies
+ * ingredient analysis requests to the Gemini API.
+ *
+ * Security: path traversal protection, body size limit,
+ * security headers, CORS policy, graceful shutdown, health endpoint.
+ */
+
 import http from 'http';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { createReadStream, existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PORT = process.env.PORT || 8080;
-const API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.OPENROUTER_API_KEY;
+// ─── Configuration ────────────────────────────────────────────────────────────
 
-// MIME types for static files
-const MIME_TYPES = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.wav': 'audio/wav',
-    '.mp4': 'video/mp4',
-    '.woff': 'application/font-woff',
-    '.ttf': 'application/font-ttf',
-    '.eot': 'application/vnd.ms-fontobject',
-    '.otf': 'application/font-otf',
-    '.wasm': 'application/wasm'
+const PORT = parseInt(process.env.PORT || '8080', 10);
+const DIST_DIR = path.join(__dirname, 'dist');
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const API_KEY = process.env.GEMINI_API_KEY;
+const MAX_BODY_BYTES = 64 * 1024; // 64 KB limit
+const UPSTREAM_TIMEOUT_MS = 30_000; // 30s timeout on Gemini
+
+// ─── MIME Types ───────────────────────────────────────────────────────────────
+
+const MIME_TYPES = new Map([
+    ['.html', 'text/html; charset=utf-8'],
+    ['.js',   'text/javascript; charset=utf-8'],
+    ['.css',  'text/css; charset=utf-8'],
+    ['.json', 'application/json; charset=utf-8'],
+    ['.png',  'image/png'],
+    ['.jpg',  'image/jpeg'],
+    ['.jpeg', 'image/jpeg'],
+    ['.gif',  'image/gif'],
+    ['.svg',  'image/svg+xml'],
+    ['.ico',  'image/x-icon'],
+    ['.webp', 'image/webp'],
+    ['.woff', 'font/woff'],
+    ['.woff2','font/woff2'],
+    ['.ttf',  'font/ttf'],
+    ['.wasm', 'application/wasm'],
+]);
+
+// ─── Security Headers ─────────────────────────────────────────────────────────
+
+const SECURITY_HEADERS = {
+    'X-Content-Type-Options':  'nosniff',
+    'X-Frame-Options':         'DENY',
+    'Referrer-Policy':         'strict-origin-when-cross-origin',
+    'Permissions-Policy':      'camera=(), microphone=(), geolocation=()',
+    'Content-Security-Policy': [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",        // Vite inlines some scripts
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https://ui-avatars.com",
+        "connect-src 'self'",
+    ].join('; '),
 };
 
-const server = http.createServer(async (req, res) => {
-    // 1. Handle API Proxying
-    if (req.url === '/api/analyze' && req.method === 'POST') {
-        if (!API_KEY) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Server configuration error: Missing API Key' }));
-        }
+// Cache-Control for static assets (1 year for fingerprinted assets, no-cache for HTML)
+function cacheControlFor(ext) {
+    if (ext === '.html') return 'no-cache, no-store, must-revalidate';
+    if (['.js', '.css', '.woff', '.woff2', '.webp', '.png'].includes(ext)) {
+        return 'public, max-age=31536000, immutable';
+    }
+    return 'public, max-age=3600';
+}
 
-        let body = '';
-        req.on('data', chunk => body += chunk.toString());
-        req.on('end', async () => {
-            try {
-                // Forward call to Gemini API
-                const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: body
-                });
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-                const data = await apiResponse.json();
-                res.writeHead(apiResponse.status, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(data));
-            } catch (error) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Proxy error', message: error.message }));
+/** Sends a JSON response. */
+function sendJson(res, status, payload, extraHeaders = {}) {
+    const body = JSON.stringify(payload);
+    res.writeHead(status, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(body),
+        ...SECURITY_HEADERS,
+        ...extraHeaders,
+    });
+    res.end(body);
+}
+
+/** Reads the incoming request body with a byte limit. */
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        let size = 0;
+        const chunks = [];
+
+        req.on('data', (chunk) => {
+            size += chunk.length;
+            if (size > MAX_BODY_BYTES) {
+                req.destroy();
+                return reject(Object.assign(new Error('Request body too large'), { statusCode: 413 }));
             }
+            chunks.push(chunk);
         });
-        return;
+
+        req.on('end',   () => resolve(Buffer.concat(chunks).toString('utf-8')));
+        req.on('error', reject);
+    });
+}
+
+/** Validates that a resolved file path stays within the dist directory. */
+function safeResolvePath(requestUrl) {
+    // Strip query strings and decode URI
+    const parsed = new URL(requestUrl, 'http://localhost');
+    const relative = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
+    const resolved = path.resolve(DIST_DIR, '.' + relative);
+
+    // Prevent path traversal
+    if (!resolved.startsWith(DIST_DIR + path.sep) && resolved !== DIST_DIR) {
+        return null;
+    }
+    return resolved;
+}
+
+// ─── Request Handlers ─────────────────────────────────────────────────────────
+
+/** GET /healthz — Cloud Run liveness check */
+function handleHealth(res) {
+    sendJson(res, 200, { status: 'ok', uptime: Math.floor(process.uptime()) });
+}
+
+/** POST /api/analyze — Secure Gemini proxy */
+async function handleAnalyze(req, res) {
+    if (!API_KEY) {
+        return sendJson(res, 503, { error: 'Service unavailable: API key not configured.' });
     }
 
-    // 2. Handle Static File Serving
-    let filePath = path.join(__dirname, 'dist', req.url === '/' ? 'index.html' : req.url);
-    const extname = String(path.extname(filePath)).toLowerCase();
-    const contentType = MIME_TYPES[extname] || 'application/octet-stream';
+    let body;
+    try {
+        body = await readBody(req);
+    } catch (err) {
+        return sendJson(res, err.statusCode || 400, { error: err.message });
+    }
 
-    fs.readFile(filePath, (error, content) => {
-        if (error) {
-            if (error.code === 'ENOENT') {
-                // Fallback to index.html for SPA routing
-                fs.readFile(path.join(__dirname, 'dist', 'index.html'), (err, indexContent) => {
-                    res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(indexContent, 'utf-8');
-                });
-            } else {
-                res.writeHead(500);
-                res.end(`Server Error: ${error.code}`);
-            }
-        } else {
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content, 'utf-8');
-        }
-    });
+    // Validate that the body is valid JSON before forwarding
+    try {
+        JSON.parse(body);
+    } catch {
+        return sendJson(res, 400, { error: 'Invalid JSON in request body.' });
+    }
+
+    // Forward to Gemini with a timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+    try {
+        const upstream = await fetch(`${GEMINI_API_URL}?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            signal: controller.signal,
+        });
+
+        const data = await upstream.json();
+        sendJson(res, upstream.status, data);
+    } catch (err) {
+        const isTimeout = err.name === 'AbortError';
+        sendJson(res, isTimeout ? 504 : 502, {
+            error: isTimeout ? 'Upstream request timed out.' : 'Proxy error.',
+            message: err.message,
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/** GET /* — Serve static files from dist/ */
+async function handleStatic(req, res) {
+    const filePath = safeResolvePath(req.url);
+
+    if (!filePath) {
+        return sendJson(res, 403, { error: 'Forbidden.' });
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES.get(ext) || 'application/octet-stream';
+
+    const fileExists = existsSync(filePath);
+
+    // SPA fallback: serve index.html for unknown routes
+    const targetPath = fileExists ? filePath : path.join(DIST_DIR, 'index.html');
+    const targetExt  = fileExists ? ext : '.html';
+    const targetType = fileExists ? contentType : 'text/html; charset=utf-8';
+
+    try {
+        const stat = await fs.stat(targetPath);
+        res.writeHead(200, {
+            'Content-Type':   targetType,
+            'Content-Length': stat.size,
+            'Cache-Control':  cacheControlFor(targetExt),
+            ...SECURITY_HEADERS,
+        });
+        createReadStream(targetPath).pipe(res);
+    } catch {
+        sendJson(res, 500, { error: 'Internal server error.' });
+    }
+}
+
+// ─── Main Server ──────────────────────────────────────────────────────────────
+
+const server = http.createServer(async (req, res) => {
+    const { method, url } = req;
+
+    // Health check
+    if (url === '/healthz' && method === 'GET') {
+        return handleHealth(res);
+    }
+
+    // API proxy
+    if (url === '/api/analyze' && method === 'POST') {
+        return handleAnalyze(req, res);
+    }
+
+    // Only allow GET for static files
+    if (method !== 'GET') {
+        return sendJson(res, 405, { error: 'Method not allowed.' });
+    }
+
+    return handleStatic(req, res);
 });
 
+// ─── Graceful Shutdown (Cloud Run sends SIGTERM) ──────────────────────────────
+
+function shutdown(signal) {
+    console.log(`[server] Received ${signal}. Closing HTTP server...`);
+    server.close(() => {
+        console.log('[server] HTTP server closed.');
+        process.exit(0);
+    });
+
+    // Force exit after 10s if connections don't drain
+    setTimeout(() => {
+        console.error('[server] Forced shutdown after timeout.');
+        process.exit(1);
+    }, 10_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+
 server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}/`);
-    console.log(`API Key configured: ${API_KEY ? 'YES' : 'NO'}`);
+    console.log(`[server] Running at http://localhost:${PORT}`);
+    console.log(`[server] API key configured: ${API_KEY ? 'YES' : 'NO ⚠️'}`);
+    console.log(`[server] Serving dist from: ${DIST_DIR}`);
 });

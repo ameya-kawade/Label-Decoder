@@ -1,77 +1,117 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Views
-    const inputView = document.getElementById('input-view');
-    const dashboardView = document.getElementById('dashboard-view');
+/**
+ * app.js — ClearLabel AI Frontend
+ *
+ * Handles form submission, API communication, and dashboard rendering.
+ * Uses DOM APIs (not innerHTML) to prevent XSS from AI-generated content.
+ */
 
-    // Form Inputs
-    const ingredientForm = document.getElementById('ingredient-form');
-    const rawIngredientsInput = document.getElementById('ingredient-input');
-    const preferencesInput = document.getElementById('preferences-input');
-    const analyzeBtn = document.getElementById('analyze-btn');
-    const loadingEl = document.getElementById('loading');
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-    // Dashboard Elements
-    const backBtn = document.getElementById('back-btn');
-    const healthScoreValue = document.getElementById('health-score-value');
-    const healthVerdict = document.getElementById('health-verdict');
-    const overallAssessment = document.getElementById('overall-assessment');
-    const resultsContainer = document.getElementById('results-container');
-    const scoreCirclePath = document.getElementById('score-circle-path');
+const API_ENDPOINT   = '/api/analyze';
+const ANALYSIS_TONE  = 'Clinical Researcher (Fact-based)';
+const ANIMATION_CIRCUMFERENCE = 552.9; // 2π × r (r = 88)
 
-    // Back to input
-    backBtn.addEventListener('click', () => {
-        dashboardView.classList.add('hidden');
-        inputView.classList.remove('hidden');
-    });
+const STATUS_CONFIG = {
+    safe: {
+        bg:        'bg-primary/5',
+        strip:     'bg-primary',
+        badge:     'bg-primary/10 text-primary',
+        iconColor: 'text-primary',
+        iconName:  'verified',
+        label:     'Verified Safe',
+    },
+    caution: {
+        bg:        'bg-secondary/5',
+        strip:     'bg-secondary',
+        badge:     'bg-secondary/10 text-secondary',
+        iconColor: 'text-secondary',
+        iconName:  'warning',
+        label:     'Monitor Intake',
+    },
+    avoid: {
+        bg:        'bg-tertiary/5 border border-tertiary/10',
+        strip:     'bg-tertiary',
+        badge:     'bg-tertiary/10 text-tertiary',
+        iconColor: 'text-tertiary',
+        iconName:  'dangerous',
+        label:     'Restricted Compound',
+    },
+};
 
-    ingredientForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+// ─── DOM References ───────────────────────────────────────────────────────────
 
-        const ingredients = rawIngredientsInput.value.trim();
-        const preferences = preferencesInput.value.trim() ? [preferencesInput.value.trim()] : [];
-        const tone = "Clinical Researcher (Fact-based)";
+const inputView         = document.getElementById('input-view');
+const dashboardView     = document.getElementById('dashboard-view');
+const ingredientForm    = document.getElementById('ingredient-form');
+const ingredientInput   = document.getElementById('ingredient-input');
+const preferencesInput  = document.getElementById('preferences-input');
+const analyzeBtn        = document.getElementById('analyze-btn');
+const loadingEl         = document.getElementById('loading');
+const backBtn           = document.getElementById('back-btn');
+const healthScoreValue  = document.getElementById('health-score-value');
+const healthVerdict     = document.getElementById('health-verdict');
+const overallAssessment = document.getElementById('overall-assessment');
+const resultsContainer  = document.getElementById('results-container');
+const scoreCirclePath   = document.getElementById('score-circle-path');
+const errorBanner       = document.getElementById('error-banner');
+const errorMessage      = document.getElementById('error-message');
 
-        if (!ingredients) {
-            alert("Please enter some ingredients to analyze.");
-            return;
-        }
+// ─── Error Handling ───────────────────────────────────────────────────────────
 
-        // Set Loading state
-        analyzeBtn.classList.add('hidden');
-        loadingEl.classList.remove('hidden');
+function showError(message) {
+    errorMessage.textContent = message;
+    errorBanner.classList.remove('hidden');
+    errorBanner.setAttribute('role', 'alert');
+    errorBanner.focus();
+}
 
-        try {
-            const data = await analyzeIngredients(ingredients, preferences, tone);
-            renderDashboard(data);
+function hideError() {
+    errorBanner.classList.add('hidden');
+    errorBanner.removeAttribute('role');
+}
 
-            // Switch views
-            inputView.classList.add('hidden');
-            dashboardView.classList.remove('hidden');
+// ─── View Management ──────────────────────────────────────────────────────────
 
-            // Trigger score animation shortly after view transition
-            setTimeout(() => animateScore(data.overall_score), 100);
+function showDashboard() {
+    inputView.classList.add('hidden');
+    dashboardView.classList.remove('hidden');
+    // Move focus to the dashboard heading for screen readers
+    const heading = dashboardView.querySelector('h1, h2, [data-focus-target]');
+    if (heading) heading.focus();
+}
 
-        } catch (error) {
-            alert("Analysis failed: " + error.message);
-        } finally {
-            // Unset loading state
-            analyzeBtn.classList.remove('hidden');
-            loadingEl.classList.add('hidden');
-        }
-    });
+function showInput() {
+    dashboardView.classList.add('hidden');
+    inputView.classList.remove('hidden');
+    ingredientInput.focus();
+}
 
-    async function analyzeIngredients(ingredients, prefs, tone) {
-        let prefsString = prefs.length > 0 ? `User dietary preferences: ${prefs.join(', ')}.` : 'No specific dietary preferences.';
+// ─── Loading State ────────────────────────────────────────────────────────────
 
-        const systemPrompt = `
-You are a food ingredient analyzer and health-conscious product advisor.
+function setLoading(isLoading) {
+    analyzeBtn.hidden  = isLoading;
+    loadingEl.hidden   = !isLoading;
+    analyzeBtn.setAttribute('aria-busy', String(isLoading));
+    if (isLoading) {
+        loadingEl.setAttribute('aria-live', 'polite');
+    }
+}
+
+// ─── API Communication ────────────────────────────────────────────────────────
+
+async function analyzeIngredients(ingredients, preferences) {
+    const prefsString = preferences.length > 0
+        ? `User dietary preferences: ${preferences.join(', ')}.`
+        : 'No specific dietary preferences.';
+
+    const systemPrompt = `You are a food ingredient analyzer and health-conscious product advisor.
 ${prefsString}
-Explanation Tone: ${tone}. Ensure the verdict and reasons match this tone.
+Explanation Tone: ${ANALYSIS_TONE}. Ensure the verdict and reasons match this tone.
 
 Analyze the given list of ingredients based on their general health impact and the user's dietary preferences.
 If an ingredient violates a dietary preference (e.g. Gelatin when Vegan is selected), it must be marked as "avoid" and the reason must state why.
 
-Based on the product type you detect from the ingredients, also recommend 2-3 specific, real-world products that are widely available and are considered a healthier alternative. These should be actual brand names that a consumer could find in a store or online (e.g., "Organic Valley Whole Milk", "KIND Dark Chocolate Nuts Bar", "Dr. Bronner's Pure-Castile Soap"). Match the recommendations to the user's dietary preferences if provided.
+Based on the product type you detect from the ingredients, also recommend 2-3 specific, real-world products that are widely available and are considered a healthier alternative. These should be actual brand names that a consumer could find in a store or online. Match the recommendations to the user's dietary preferences if provided.
 
 You MUST respond strictly with a valid JSON object matching the following structure exactly, with no additional markdown outside the JSON block.
 {
@@ -79,11 +119,11 @@ You MUST respond strictly with a valid JSON object matching the following struct
   "one_sentence_verdict": "Moderate Risk",
   "overall_assessment": "Detailed 2-sentence clinical assessment of the cumulative impact.",
   "ingredients": [
-    { 
-      "name": "Original ingredient name", 
-      "plain_english": "What it actually is", 
-      "status": "safe", 
-      "reason": "Why it got this status" 
+    {
+      "name": "Original ingredient name",
+      "plain_english": "What it actually is",
+      "status": "safe",
+      "reason": "Why it got this status"
     }
   ],
   "better_alternative": "String suggesting a better alternative product category based on the flaws",
@@ -93,166 +133,275 @@ You MUST respond strictly with a valid JSON object matching the following struct
       "reason": "One sentence on why this product is a better choice"
     }
   ]
-}
-`;
+}`;
 
-        const requestBody = {
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ parts: [{ text: ingredients }] }],
-            generationConfig: { responseMimeType: "application/json" }
-        };
+    const requestBody = {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents:          [{ parts: [{ text: ingredients }] }],
+        generationConfig:  { responseMimeType: 'application/json' },
+    };
 
-        // Call the secure local proxy instead of the Gemini API directly
-        const response = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
+    const response = await fetch(API_ENDPOINT, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(requestBody),
+    });
 
-        if (!response.ok) {
-            let errorMsg = `API Request failed: ${response.status} ${response.statusText}`;
-            try {
-                const errorData = await response.json();
-                if (errorData.message) errorMsg = errorData.message;
-                else if (errorData.error) errorMsg = errorData.error;
-            } catch (e) {
-                // Not JSON, fallback to generic HTTP status message
-            }
-            throw new Error(errorMsg);
-        }
-
-        const result = await response.json();
-        let content = result.candidates[0].content.parts[0].text;
-
-        if (content.startsWith("\`\`\`json")) {
-            content = content.replace(/^\\\`\\\`\\\`json/i, '').replace(/\\\`\\\`\\\`$/, '').trim();
-        } else if (content.startsWith("\`\`\`")) {
-            content = content.replace(/^\\\`\\\`\\\`/i, '').replace(/\\\`\\\`\\\`$/, '').trim();
-        }
-
+    if (!response.ok) {
+        let msg = `Request failed: ${response.status} ${response.statusText}`;
         try {
-            return JSON.parse(content);
-        } catch (e) {
-            console.error("JSON Parse Error:", e, content);
-            throw new Error("Failed to parse the API response. Format invalid.");
-        }
+            const err = await response.json();
+            if (err.error)   msg = err.error;
+            if (err.message) msg = err.message;
+        } catch { /* non-JSON error — use HTTP status message */ }
+        throw new Error(msg);
     }
 
-    function renderDashboard(data) {
-        // Update Static Texts
-        healthScoreValue.textContent = data.overall_score;
-        healthVerdict.textContent = data.one_sentence_verdict;
-        overallAssessment.textContent = data.overall_assessment || `${data.one_sentence_verdict}. Based on the detected compounds and your profile preferences, this is the clinical evaluation.`;
+    const result = await response.json();
 
-        // Reset path
-        scoreCirclePath.style.strokeDashoffset = "552.9";
+    // Guard against unexpected Gemini response shapes
+    const raw = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) throw new Error('Unexpected response format from analysis service.');
 
-        // Clear previous cards
-        resultsContainer.innerHTML = '';
+    // Strip optional markdown code fences (e.g. ```json ... ```)
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
-        // Render Ingredient Cards
-        data.ingredients.forEach(item => {
-            const card = document.createElement('div');
+    try {
+        return JSON.parse(cleaned);
+    } catch {
+        console.error('[app] JSON parse error. Raw response:', raw);
+        throw new Error('Failed to parse analysis response. Please try again.');
+    }
+}
 
-            // Define styles based on status
-            let styles = {
-                bg: "bg-primary/5", strip: "bg-primary", badge: "bg-primary/10 text-primary",
-                iconColor: "text-primary", iconName: "verified", typeStr: "Verified Safe"
-            };
+// ─── DOM Builders (XSS-safe — textContent only) ───────────────────────────────
 
-            const normalizedStatus = item.status.toLowerCase();
-            if (normalizedStatus === 'caution') {
-                styles = {
-                    bg: "bg-secondary/5", strip: "bg-secondary", badge: "bg-secondary/10 text-secondary bg-secondary-container/20",
-                    iconColor: "text-secondary", iconName: "warning", typeStr: "Monitor Intake"
-                };
-            } else if (normalizedStatus === 'avoid') {
-                styles = {
-                    bg: "bg-tertiary/5 border border-tertiary/10", strip: "bg-tertiary", badge: "bg-tertiary/10 text-tertiary",
-                    iconColor: "text-tertiary", iconName: "dangerous", typeStr: "Restricted Compound"
-                };
-            }
+/** Creates a single ingredient status card using DOM APIs, not innerHTML. */
+function createIngredientCard(item) {
+    const status  = (item.status || 'safe').toLowerCase();
+    const config  = STATUS_CONFIG[status] || STATUS_CONFIG.safe;
 
-            card.className = `group relative ${styles.bg} p-6 rounded-2xl transition-all duration-300`;
-            card.innerHTML = `
-                <div class="absolute top-0 left-0 w-1.5 h-full ${styles.strip} rounded-l-2xl"></div>
-                <div class="flex justify-between items-start">
-                    <div class="space-y-1">
-                        <h4 class="font-headline font-bold text-xl text-on-surface">${item.name}</h4>
-                        <span class="inline-block px-2 py-0.5 text-xs font-semibold ${styles.badge} rounded">${styles.typeStr}</span>
-                    </div>
-                    <div class="text-right">
-                        <span class="material-symbols-outlined ${styles.iconColor} text-3xl" style="font-variation-settings: 'FILL' 1;">${styles.iconName}</span>
-                    </div>
-                </div>
-                <div class="mt-4 grid grid-cols-2 gap-4">
-                    <div>
-                        <span class="text-xs font-label text-outline block mb-1">Plain English</span>
-                        <p class="text-sm font-medium">${item.plain_english}</p>
-                    </div>
-                    <div>
-                        <span class="text-xs font-label text-outline block mb-1">Classification</span>
-                        <p class="text-sm font-medium capitalize">${item.status}</p>
-                    </div>
-                </div>
-                <p class="mt-4 text-sm text-on-surface-variant leading-snug">${item.reason}</p>
-            `;
+    const card = document.createElement('article');
+    card.className = `group relative ${config.bg} p-6 rounded-2xl transition-all duration-300`;
+    card.setAttribute('aria-label', `${item.name} — ${config.label}`);
 
-            resultsContainer.appendChild(card);
-        });
+    // Left colour strip
+    const strip = document.createElement('div');
+    strip.className = `absolute top-0 left-0 w-1.5 h-full ${config.strip} rounded-l-2xl`;
+    strip.setAttribute('aria-hidden', 'true');
 
-        // Add Better Alternative block if present
-        if (data.better_alternative) {
-            const altDiv = document.createElement('div');
-            altDiv.className = "mt-6 p-6 bg-surface-container-low rounded-2xl border-l-4 border-primary";
-            altDiv.innerHTML = `
-                <h4 class="font-headline font-bold text-lg mb-2 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary text-xl">recommend</span> Recommended Alternative
-                </h4>
-                <p class="text-sm text-on-surface-variant leading-relaxed italic">${data.better_alternative}</p>
-            `;
-            resultsContainer.appendChild(altDiv);
-        }
+    // Header row
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-start';
 
-        // Add Good Products block if present
-        if (data.good_products && data.good_products.length > 0) {
-            const productsDiv = document.createElement('div');
-            productsDiv.className = "mt-6 p-6 bg-surface-container-lowest rounded-2xl";
-            productsDiv.innerHTML = `
-                <h4 class="font-headline font-bold text-lg mb-4 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-secondary text-xl">verified_user</span> Healthier Products To Try
-                </h4>
-                <div class="space-y-3">
-                    ${data.good_products.map(p => `
-                        <div class="flex items-start gap-3 p-3 bg-surface-container rounded-xl">
-                            <span class="material-symbols-outlined text-primary mt-0.5 text-base" style="font-variation-settings: 'FILL' 1;">grade</span>
-                            <div>
-                                <p class="font-semibold text-sm text-on-surface">${p.name}</p>
-                                <p class="text-xs text-on-surface-variant mt-0.5">${p.reason}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            resultsContainer.appendChild(productsDiv);
-        }
+    const titleGroup = document.createElement('div');
+    titleGroup.className = 'space-y-1';
+
+    const nameEl = document.createElement('h4');
+    nameEl.className = 'font-headline font-bold text-xl text-on-surface';
+    nameEl.textContent = item.name;
+
+    const badge = document.createElement('span');
+    badge.className = `inline-block px-2 py-0.5 text-xs font-semibold ${config.badge} rounded`;
+    badge.textContent = config.label;
+
+    titleGroup.append(nameEl, badge);
+
+    const iconWrap = document.createElement('div');
+    iconWrap.setAttribute('aria-hidden', 'true');
+
+    const icon = document.createElement('span');
+    icon.className = `material-symbols-outlined ${config.iconColor} text-3xl`;
+    icon.style.fontVariationSettings = "'FILL' 1";
+    icon.textContent = config.iconName;
+
+    iconWrap.appendChild(icon);
+    header.append(titleGroup, iconWrap);
+
+    // Details grid
+    const grid = document.createElement('div');
+    grid.className = 'mt-4 grid grid-cols-2 gap-4';
+
+    const makeDetailCell = (labelText, valueText) => {
+        const cell = document.createElement('div');
+        const lbl  = document.createElement('span');
+        lbl.className = 'text-xs font-label text-outline block mb-1';
+        lbl.textContent = labelText;
+        const val = document.createElement('p');
+        val.className = 'text-sm font-medium';
+        val.textContent = valueText;
+        cell.append(lbl, val);
+        return cell;
+    };
+
+    grid.append(
+        makeDetailCell('Plain English',  item.plain_english || '—'),
+        makeDetailCell('Classification', item.status        || '—'),
+    );
+
+    // Reason paragraph
+    const reason = document.createElement('p');
+    reason.className = 'mt-4 text-sm text-on-surface-variant leading-snug';
+    reason.textContent = item.reason;
+
+    card.append(strip, header, grid, reason);
+    return card;
+}
+
+/** Creates the "Recommended Alternative" block. */
+function createAlternativeBlock(text) {
+    const wrap = document.createElement('section');
+    wrap.className = 'mt-6 p-6 bg-surface-container-low rounded-2xl border-l-4 border-primary';
+
+    const heading = document.createElement('h4');
+    heading.className = 'font-headline font-bold text-lg mb-2 flex items-center gap-2';
+
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined text-primary text-xl';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = 'recommend';
+
+    const title = document.createTextNode(' Recommended Alternative');
+    heading.append(icon, title);
+
+    const body = document.createElement('p');
+    body.className = 'text-sm text-on-surface-variant leading-relaxed italic';
+    body.textContent = text;
+
+    wrap.append(heading, body);
+    return wrap;
+}
+
+/** Creates the "Healthier Products" block. */
+function createGoodProductsBlock(products) {
+    const wrap = document.createElement('section');
+    wrap.className = 'mt-6 p-6 bg-surface-container-lowest rounded-2xl';
+
+    const heading = document.createElement('h4');
+    heading.className = 'font-headline font-bold text-lg mb-4 flex items-center gap-2';
+
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined text-secondary text-xl';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = 'verified_user';
+
+    const title = document.createTextNode(' Healthier Products To Try');
+    heading.append(icon, title);
+
+    const list = document.createElement('ul');
+    list.className = 'space-y-3';
+    list.setAttribute('aria-label', 'Recommended healthy products');
+
+    for (const product of products) {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-3 p-3 bg-surface-container rounded-xl';
+
+        const starIcon = document.createElement('span');
+        starIcon.className = 'material-symbols-outlined text-primary mt-0.5 text-base';
+        starIcon.style.fontVariationSettings = "'FILL' 1";
+        starIcon.setAttribute('aria-hidden', 'true');
+        starIcon.textContent = 'grade';
+
+        const textWrap = document.createElement('div');
+
+        const productName = document.createElement('p');
+        productName.className = 'font-semibold text-sm text-on-surface';
+        productName.textContent = product.name;
+
+        const productReason = document.createElement('p');
+        productReason.className = 'text-xs text-on-surface-variant mt-0.5';
+        productReason.textContent = product.reason;
+
+        textWrap.append(productName, productReason);
+        li.append(starIcon, textWrap);
+        list.appendChild(li);
     }
 
-    function animateScore(score) {
-        const circumference = 552.9; // 2 * pi * r (r=88)
-        const offset = circumference - (score / 100) * circumference;
+    wrap.append(heading, list);
+    return wrap;
+}
 
-        // Define color based on score
-        let strokeColor = "var(--color-tertiary, #bb171c)";
-        if (score >= 70) {
-            strokeColor = "var(--color-primary, #006c46)";
-        } else if (score >= 40) {
-            strokeColor = "var(--color-secondary, #7c5800)";
-        }
+// ─── Dashboard Renderer ───────────────────────────────────────────────────────
 
-        scoreCirclePath.style.stroke = strokeColor;
-        scoreCirclePath.style.strokeDashoffset = offset;
+function renderDashboard(data) {
+    const score = Number.isFinite(data.overall_score) ? data.overall_score : 0;
+
+    // Update score & verdict
+    healthScoreValue.textContent = score;
+    healthVerdict.textContent    = data.one_sentence_verdict ?? '—';
+    overallAssessment.textContent = data.overall_assessment
+        ?? `${data.one_sentence_verdict}. Based on the detected compounds, this is the clinical evaluation.`;
+
+    // Reset SVG ring
+    scoreCirclePath.style.strokeDashoffset = String(ANIMATION_CIRCUMFERENCE);
+
+    // Clear previous results safely
+    resultsContainer.replaceChildren();
+
+    // Render ingredient cards
+    const fragment = document.createDocumentFragment();
+    for (const item of (data.ingredients ?? [])) {
+        fragment.appendChild(createIngredientCard(item));
+    }
+
+    if (data.better_alternative) {
+        fragment.appendChild(createAlternativeBlock(data.better_alternative));
+    }
+
+    if (Array.isArray(data.good_products) && data.good_products.length > 0) {
+        fragment.appendChild(createGoodProductsBlock(data.good_products));
+    }
+
+    resultsContainer.appendChild(fragment);
+}
+
+// ─── Score Animation ──────────────────────────────────────────────────────────
+
+function animateScore(score) {
+    const offset = ANIMATION_CIRCUMFERENCE - (score / 100) * ANIMATION_CIRCUMFERENCE;
+
+    let strokeColor = 'var(--color-tertiary, #bb171c)';
+    if (score >= 70)      strokeColor = 'var(--color-primary,   #006c46)';
+    else if (score >= 40) strokeColor = 'var(--color-secondary, #7c5800)';
+
+    scoreCirclePath.style.stroke = strokeColor;
+
+    // Use requestAnimationFrame for a smooth, reliable animation trigger
+    requestAnimationFrame(() => {
+        scoreCirclePath.style.strokeDashoffset = String(offset);
+    });
+}
+
+// ─── Event Listeners ──────────────────────────────────────────────────────────
+
+backBtn.addEventListener('click', showInput);
+
+ingredientForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const ingredients = ingredientInput.value.trim();
+    if (!ingredients) {
+        showError('Please enter some ingredients to analyze.');
+        ingredientInput.focus();
+        return;
+    }
+
+    const preferences = preferencesInput.value.trim()
+        ? [preferencesInput.value.trim()]
+        : [];
+
+    setLoading(true);
+
+    try {
+        const data = await analyzeIngredients(ingredients, preferences);
+        renderDashboard(data);
+        showDashboard();
+        // Animate after the view is visible in the next frame
+        requestAnimationFrame(() => animateScore(data.overall_score ?? 0));
+    } catch (error) {
+        showError(`Analysis failed: ${error.message}`);
+    } finally {
+        setLoading(false);
     }
 });

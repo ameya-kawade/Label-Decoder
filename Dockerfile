@@ -1,35 +1,39 @@
-# Stage 1: Build the frontend
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy manifests first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Use 'ci' for reproducible, locked installs
+RUN npm ci
 
-# Copy all files for build
+# Copy source and build
 COPY . .
-
-# Build the project (Vite will output to /app/dist)
 RUN npm run build
 
-# Stage 2: Serve with a thin runtime
+# ── Stage 2: Production runtime ───────────────────────────────────────────────
 FROM node:20-slim
+
+# Set production environment for Node.js performance optimizations
+ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Copy only what we need for the server
+# Only copy the files the runtime server needs
 COPY package.json ./
 COPY server.js ./
 COPY --from=builder /app/dist ./dist
 
-# Set the port (Cloud Run defaults to 8080)
+# Run as the built-in non-root 'node' user for security
+USER node
+
+# Cloud Run injects PORT; default to 8080
 EXPOSE 8080
 
-# Environment variables (Gemini API Key should be provided at runtime)
-# ENV GEMINI_API_KEY=YOUR_KEY_HERE (Recommended to use Cloud Run Secrets)
+# Health check — Cloud Run will probe /healthz
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:8080/healthz', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-# Run the server
 CMD ["node", "server.js"]

@@ -1,181 +1,256 @@
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html lang="en">
 <head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>ClearLabel AI | Lucid Health</title>
-    
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com"/>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClearLabel AI | Lucid Health — Decode Your Ingredients</title>
+    <meta name="description" content="ClearLabel AI transforms complex ingredient lists into clear, science-backed health insights. Paste any product label and get an instant forensic analysis."/>
+    <meta name="theme-color" content="#006c46" />
+
+    <!-- Fonts: merged into a single request for efficiency -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet"
+    />
+
     <!-- Styles -->
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="bg-surface font-body text-on-surface min-h-screen flex flex-col">
 
-    <!-- TopNavBar (Shared) -->
-    <nav class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-slate-950/80 glass-morphism shadow-sm shadow-emerald-900/5">
+    <!-- Skip navigation link for keyboard users -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-on-primary focus:rounded-lg focus:font-bold">
+        Skip to main content
+    </a>
+
+    <!-- Top Navigation -->
+    <nav aria-label="Main navigation" class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-slate-950/80 glass-morphism shadow-sm shadow-emerald-900/5">
         <div class="flex justify-between items-center px-8 py-4 max-w-screen-2xl mx-auto">
-            <div class="text-2xl font-bold font-headline text-primary">Lucid Health</div>
-            <div class="hidden md:flex items-center space-x-8 font-headline text-base tracking-tight">
-                <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Ingredients</a>
-                <a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Methodology</a>
-                <a class="text-primary border-b-2 border-primary pb-1 font-semibold" href="#">ClearLabel AI</a>
+            <div class="text-2xl font-bold font-headline text-primary" aria-label="Lucid Health home">Lucid Health</div>
+            <div class="hidden md:flex items-center space-x-8 font-headline text-base tracking-tight" role="list">
+                <a class="text-on-surface-variant hover:text-primary transition-colors" href="#" role="listitem">Ingredients</a>
+                <a class="text-on-surface-variant hover:text-primary transition-colors" href="#" role="listitem">Methodology</a>
+                <a class="text-primary border-b-2 border-primary pb-1 font-semibold" href="#" aria-current="page" role="listitem">ClearLabel AI</a>
             </div>
             <div class="flex items-center space-x-4">
-                <button class="p-2 hover:bg-surface-container rounded-lg transition-all duration-300">
-                    <span class="material-symbols-outlined text-primary">notifications</span>
+                <button
+                    class="p-2 hover:bg-surface-container rounded-lg transition-all duration-300"
+                    aria-label="View notifications"
+                >
+                    <span class="material-symbols-outlined text-primary" aria-hidden="true">notifications</span>
                 </button>
-                <div class="h-10 w-10 rounded-full overflow-hidden bg-surface-container-highest border border-outline-variant">
-                    <img alt="User Profile" src="https://ui-avatars.com/api/?name=User&background=006c46&color=fff" />
+                <div class="h-10 w-10 rounded-full overflow-hidden bg-surface-container-highest border border-outline-variant" aria-hidden="true">
+                    <img alt="" src="https://ui-avatars.com/api/?name=User&background=006c46&color=fff" />
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- VIEW 1: INPUT FORM -->
-    <section id="input-view" class="pt-32 pb-20 px-8 max-w-screen-2xl mx-auto w-full flex-grow">
-        <!-- Hero Section -->
-        <div class="mb-16 text-center md:text-left">
-            <div class="max-w-3xl">
-                <h1 class="font-headline text-5xl md:text-6xl font-extrabold text-primary mb-6 leading-tight">
-                    Decode what's actually inside.
-                </h1>
-                <p class="text-xl text-on-surface-variant max-w-2xl leading-relaxed">
-                    ClearLabel AI transforms complex chemical lists into clear, science-backed insights. Paste ingredients to uncover the truth.
-                </p>
-            </div>
-        </div>
+    <!-- Global Error Banner (hidden by default, shown by app.js) -->
+    <div
+        id="error-banner"
+        class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[200] w-full max-w-xl px-6 py-4 bg-tertiary text-on-tertiary rounded-2xl shadow-xl flex items-center gap-3 transition-all"
+        tabindex="-1"
+    >
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <p id="error-message" class="text-sm font-medium flex-1"></p>
+        <button
+            onclick="document.getElementById('error-banner').classList.add('hidden')"
+            class="ml-auto p-1 hover:opacity-70 transition-opacity rounded"
+            aria-label="Dismiss error"
+        >
+            <span class="material-symbols-outlined text-base" aria-hidden="true">close</span>
+        </button>
+    </div>
 
-        <form id="ingredient-form" class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <!-- Left Column: Manual Input -->
-            <div class="lg:col-span-7">
-                <div class="bg-surface-container-lowest p-8 rounded-xl shadow-sm">
-                    <div class="flex items-center gap-3 mb-6">
-                        <span class="material-symbols-outlined text-primary">edit_note</span>
-                        <h2 class="font-headline text-2xl font-bold">Manual Analysis</h2>
-                    </div>
-                    <p class="text-on-surface-variant mb-4 text-sm">Paste the ingredient list from any product label below. Separate items with commas.</p>
-                    <textarea 
-                        id="ingredient-input" 
-                        required
-                        aria-label="Enter ingredients separated by commas"
-                        class="w-full h-80 bg-surface-container-low border-0 outline-none focus:ring-2 focus:ring-primary/40 rounded-lg p-6 text-on-surface placeholder-outline font-body resize-none" 
-                        placeholder="Aqua, Glycerin, Sodium Laureth Sulfate, Phenoxyethanol..."
-                    ></textarea>
-                </div>
-            </div>
+    <main id="main-content">
 
-            <!-- Right Column: Settings & Toggles -->
-            <div class="lg:col-span-5 space-y-8 flex flex-col">
-                <!-- Dietary Profile -->
-                <div class="bg-surface-container-low p-8 rounded-xl">
-                    <div class="flex items-center gap-3 mb-6">
-                        <span class="material-symbols-outlined text-primary">tune</span>
-                        <h3 class="font-headline text-xl font-bold">Dietary Profile</h3>
-                    </div>
-                    <p class="text-on-surface-variant text-sm mb-4">Define any dietary preferences or allergies to tailor the analysis.</p>
-                    <input 
-                        type="text" 
-                        id="preferences-input"
-                        aria-label="Enter dietary preferences"
-                        class="w-full bg-surface-container-lowest border-0 rounded-lg py-4 px-5 outline-none focus:ring-2 focus:ring-primary/40 text-on-surface font-medium placeholder-outline"
-                        placeholder="e.g., Vegan, Gluten-Free, No Artificial Colors"
-                    />
-                </div>
-
-                <!-- Subtle Informational Card -->
-                <div class="bg-secondary-container/10 p-6 rounded-xl flex gap-4">
-                    <span class="material-symbols-outlined text-secondary">info</span>
-                    <p class="text-sm text-on-secondary-container leading-relaxed">
-                        Our AI models are trained on the latest peer-reviewed toxicological databases to ensure high accuracy in identifying hidden additives.
+        <!-- VIEW 1: INPUT FORM -->
+        <section id="input-view" class="pt-32 pb-20 px-8 max-w-screen-2xl mx-auto w-full flex-grow" aria-label="Ingredient analysis input">
+            <!-- Hero Section -->
+            <div class="mb-16 text-center md:text-left">
+                <div class="max-w-3xl">
+                    <h1 class="font-headline text-5xl md:text-6xl font-extrabold text-primary mb-6 leading-tight" tabindex="-1">
+                        Decode what's actually inside.
+                    </h1>
+                    <p class="text-xl text-on-surface-variant max-w-2xl leading-relaxed">
+                        ClearLabel AI transforms complex chemical lists into clear, science-backed insights. Paste ingredients to uncover the truth.
                     </p>
                 </div>
+            </div>
 
-                <!-- Submit Button -->
-                <div class="mt-auto pt-4">
-                    <button type="submit" id="analyze-btn" class="w-full bg-primary hover:bg-primary-container text-on-primary px-8 py-5 rounded-xl font-headline font-bold text-lg shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-3">
-                        <span class="material-symbols-outlined">rocket_launch</span>
-                        Start Analysis
-                    </button>
-                    <!-- Loading Indicator (Hidden) -->
-                    <div id="loading" class="hidden w-full text-center py-5 mt-2 bg-surface-container text-on-surface rounded-xl font-medium animate-pulse">
-                        Analyzing ingredients...
+            <form id="ingredient-form" class="grid grid-cols-1 lg:grid-cols-12 gap-10" novalidate>
+                <!-- Left Column: Manual Input -->
+                <div class="lg:col-span-7">
+                    <div class="bg-surface-container-lowest p-8 rounded-xl shadow-sm">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="material-symbols-outlined text-primary" aria-hidden="true">edit_note</span>
+                            <h2 id="manual-analysis-heading" class="font-headline text-2xl font-bold">Manual Analysis</h2>
+                        </div>
+                        <p class="text-on-surface-variant mb-4 text-sm" id="ingredient-hint">
+                            Paste the ingredient list from any product label below. Separate items with commas.
+                        </p>
+                        <textarea
+                            id="ingredient-input"
+                            name="ingredients"
+                            required
+                            aria-labelledby="manual-analysis-heading"
+                            aria-describedby="ingredient-hint"
+                            class="w-full h-80 bg-surface-container-low border-0 outline-none focus:ring-2 focus:ring-primary/40 rounded-lg p-6 text-on-surface placeholder-outline font-body resize-none"
+                            placeholder="Aqua, Glycerin, Sodium Laureth Sulfate, Phenoxyethanol..."
+                        ></textarea>
                     </div>
                 </div>
-            </div>
-        </form>
-    </section>
 
-    <!-- VIEW 2: DASHBOARD (Hidden initially) -->
-    <section id="dashboard-view" class="hidden pt-28 pb-12 px-8 max-w-screen-2xl mx-auto w-full flex-grow">
-        <div class="mb-8 flex items-center justify-between">
-            <button id="back-btn" class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-medium">
-                <span class="material-symbols-outlined">arrow_back</span>
-                Back to Input
-            </button>
-        </div>
+                <!-- Right Column: Settings & Action -->
+                <div class="lg:col-span-5 space-y-8 flex flex-col">
+                    <!-- Dietary Profile -->
+                    <div class="bg-surface-container-low p-8 rounded-xl">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="material-symbols-outlined text-primary" aria-hidden="true">tune</span>
+                            <h3 id="dietary-profile-heading" class="font-headline text-xl font-bold">Dietary Profile</h3>
+                        </div>
+                        <p class="text-on-surface-variant text-sm mb-4" id="dietary-hint">
+                            Define any dietary preferences or allergies to tailor the analysis.
+                        </p>
+                        <input
+                            type="text"
+                            id="preferences-input"
+                            name="preferences"
+                            aria-labelledby="dietary-profile-heading"
+                            aria-describedby="dietary-hint"
+                            class="w-full bg-surface-container-lowest border-0 rounded-lg py-4 px-5 outline-none focus:ring-2 focus:ring-primary/40 text-on-surface font-medium placeholder-outline"
+                            placeholder="e.g., Vegan, Gluten-Free, No Artificial Colors"
+                        />
+                    </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <!-- Left Column: Health Score -->
-            <div class="lg:col-span-4 space-y-8 sticky top-28">
-                <div class="bg-surface-container-lowest p-8 rounded-2xl shadow-sm">
-                    <h2 class="text-sm font-label uppercase tracking-widest text-outline mb-6 text-center">Health Score</h2>
-                    <div class="relative w-48 h-48 mx-auto flex items-center justify-center">
-                        <svg class="w-full h-full transform -rotate-90">
-                            <circle class="text-surface-container-highest" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-width="12"></circle>
-                            <circle id="score-circle-path" class="text-primary transition-all duration-1000 ease-out fill-transparent" cx="96" cy="96" r="88" stroke="currentColor" stroke-dasharray="552.9" stroke-dashoffset="552.9" stroke-width="12"></circle>
-                        </svg>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span id="health-score-value" class="text-5xl font-headline font-extrabold text-on-surface">--</span>
-                            <span class="text-sm font-label text-outline">/ 100</span>
+                    <!-- Informational Card -->
+                    <div class="bg-secondary-container/10 p-6 rounded-xl flex gap-4" role="note">
+                        <span class="material-symbols-outlined text-secondary" aria-hidden="true">info</span>
+                        <p class="text-sm text-on-secondary-container leading-relaxed">
+                            Our AI models are trained on peer-reviewed toxicological databases to ensure high accuracy in identifying hidden additives.
+                        </p>
+                    </div>
+
+                    <!-- Submit Button & Loading -->
+                    <div class="mt-auto pt-4">
+                        <button
+                            type="submit"
+                            id="analyze-btn"
+                            class="w-full bg-primary hover:bg-primary-container text-on-primary px-8 py-5 rounded-xl font-headline font-bold text-lg shadow-lg shadow-primary/20 transition-all flex justify-center items-center gap-3"
+                            aria-describedby="ingredient-hint"
+                        >
+                            <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+                            Start Analysis
+                        </button>
+
+                        <!-- Loading Indicator -->
+                        <div
+                            id="loading"
+                            hidden
+                            role="status"
+                            aria-label="Analyzing ingredients, please wait"
+                            class="w-full text-center py-5 mt-2 bg-surface-container text-on-surface rounded-xl font-medium animate-pulse"
+                        >
+                            Analyzing ingredients...
                         </div>
                     </div>
-                    <div class="mt-6 text-center">
-                        <span id="health-verdict" class="inline-block px-4 py-1.5 rounded-full bg-surface-container text-on-surface font-semibold text-sm">--</span>
-                    </div>
                 </div>
+            </form>
+        </section>
 
-                <div class="bg-surface-container-low p-6 rounded-2xl border-l-4 border-secondary">
-                    <div class="flex items-center gap-3 mb-4">
-                        <span class="material-symbols-outlined text-secondary">clinical_notes</span>
-                        <h3 class="font-headline font-bold text-lg">Overall Assessment</h3>
-                    </div>
-                    <p id="overall-assessment" class="text-on-surface-variant leading-relaxed text-sm">
-                        Loading assessment...
-                    </p>
-                </div>
+        <!-- VIEW 2: DASHBOARD (hidden initially) -->
+        <section id="dashboard-view" class="hidden pt-28 pb-12 px-8 max-w-screen-2xl mx-auto w-full flex-grow" aria-label="Analysis results dashboard">
+            <div class="mb-8 flex items-center justify-between">
+                <button
+                    id="back-btn"
+                    class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-medium"
+                    aria-label="Back to ingredient input"
+                >
+                    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+                    Back to Input
+                </button>
             </div>
 
-            <!-- Right Column: Ingredient Breakdown -->
-            <div class="lg:col-span-8 space-y-6">
-                <div class="flex justify-between items-end mb-4">
-                    <div>
-                        <h1 class="text-3xl font-headline font-extrabold text-on-surface tracking-tight">Ingredient Forensic</h1>
-                        <p class="text-outline text-sm">Detected compounds based on your profile.</p>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <!-- Left Column: Health Score -->
+                <div class="lg:col-span-4 space-y-8 sticky top-28">
+                    <div class="bg-surface-container-lowest p-8 rounded-2xl shadow-sm">
+                        <h2 class="text-sm font-label uppercase tracking-widest text-outline mb-6 text-center" id="health-score-heading">Health Score</h2>
+                        <div
+                            class="relative w-48 h-48 mx-auto flex items-center justify-center"
+                            role="img"
+                            aria-labelledby="health-score-heading"
+                            aria-describedby="health-score-value"
+                        >
+                            <svg class="w-full h-full transform -rotate-90" aria-hidden="true" focusable="false">
+                                <circle class="text-surface-container-highest" cx="96" cy="96" fill="transparent" r="88" stroke="currentColor" stroke-width="12"></circle>
+                                <circle
+                                    id="score-circle-path"
+                                    class="text-primary transition-all duration-1000 ease-out fill-transparent"
+                                    cx="96" cy="96" r="88"
+                                    stroke="currentColor"
+                                    stroke-dasharray="552.9"
+                                    stroke-dashoffset="552.9"
+                                    stroke-width="12"
+                                ></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
+                                <span id="health-score-value" class="text-5xl font-headline font-extrabold text-on-surface">--</span>
+                                <span class="text-sm font-label text-outline">/ 100</span>
+                            </div>
+                        </div>
+                        <div class="mt-6 text-center">
+                            <span id="health-verdict" class="inline-block px-4 py-1.5 rounded-full bg-surface-container text-on-surface font-semibold text-sm">--</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface-container-low p-6 rounded-2xl border-l-4 border-secondary">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="material-symbols-outlined text-secondary" aria-hidden="true">clinical_notes</span>
+                            <h3 class="font-headline font-bold text-lg">Overall Assessment</h3>
+                        </div>
+                        <p id="overall-assessment" class="text-on-surface-variant leading-relaxed text-sm">
+                            Loading assessment...
+                        </p>
                     </div>
                 </div>
 
-                <!-- Dynamic container for ingredient cards -->
-                <div id="results-container" class="space-y-6">
-                    <!-- Cards will be injected here via JavaScript -->
+                <!-- Right Column: Ingredient Breakdown -->
+                <div class="lg:col-span-8 space-y-6">
+                    <div class="flex justify-between items-end mb-4">
+                        <div>
+                            <h1 class="text-3xl font-headline font-extrabold text-on-surface tracking-tight" tabindex="-1" data-focus-target>Ingredient Forensic</h1>
+                            <p class="text-outline text-sm">Detected compounds based on your profile.</p>
+                        </div>
+                    </div>
+                    <div id="results-container" class="space-y-6" aria-live="polite" aria-label="Ingredient analysis results"></div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+
+    </main>
 
     <!-- Footer -->
     <footer class="mt-auto bg-surface-container-highest border-t border-outline-variant/30">
         <div class="px-12 py-8 max-w-screen-2xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="font-headline font-bold text-primary text-xl">Lucid Health</div>
             <p class="font-body text-sm text-on-surface-variant">
-                © 2026 ClearLabel AI. Scientific rigor meets organic wellness.
+                &copy; 2026 ClearLabel AI. Scientific rigor meets organic wellness.
             </p>
         </div>
     </footer>
+
+    <!-- No-JavaScript fallback -->
+    <noscript>
+        <div class="fixed inset-0 z-[999] flex items-center justify-center bg-surface text-center p-8">
+            <p class="text-lg font-headline text-on-surface">
+                ClearLabel AI requires JavaScript to function. Please enable it in your browser settings.
+            </p>
+        </div>
+    </noscript>
 
     <script type="module" src="/app.js"></script>
 </body>

@@ -58,3 +58,5 @@ coverage/
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+doc
