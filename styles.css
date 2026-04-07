@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+@config './tailwind.config.js';
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.glass-morphism {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+/* Base custom utilities used across app */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Custom transitions for score circle */
+#score-circle-path {
+    transition: stroke-dashoffset 1s ease-in-out, stroke 0.5s ease-in-out;
+}
