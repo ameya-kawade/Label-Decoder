@@ -64,12 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let prefsString = prefs.length > 0 ? `User dietary preferences: ${prefs.join(', ')}.` : 'No specific dietary preferences.';
 
         const systemPrompt = `
-You are a food ingredient analyzer.
+You are a food ingredient analyzer and health-conscious product advisor.
 ${prefsString}
 Explanation Tone: ${tone}. Ensure the verdict and reasons match this tone.
 
 Analyze the given list of ingredients based on their general health impact and the user's dietary preferences.
 If an ingredient violates a dietary preference (e.g. Gelatin when Vegan is selected), it must be marked as "avoid" and the reason must state why.
+
+Based on the product type you detect from the ingredients, also recommend 2-3 specific, real-world products that are widely available and are considered a healthier alternative. These should be actual brand names that a consumer could find in a store or online (e.g., "Organic Valley Whole Milk", "KIND Dark Chocolate Nuts Bar", "Dr. Bronner's Pure-Castile Soap"). Match the recommendations to the user's dietary preferences if provided.
 
 You MUST respond strictly with a valid JSON object matching the following structure exactly, with no additional markdown outside the JSON block.
 {
@@ -84,7 +86,13 @@ You MUST respond strictly with a valid JSON object matching the following struct
       "reason": "Why it got this status" 
     }
   ],
-  "better_alternative": "String suggesting a better alternative product based on the flaws"
+  "better_alternative": "String suggesting a better alternative product category based on the flaws",
+  "good_products": [
+    {
+      "name": "Specific Product Brand Name",
+      "reason": "One sentence on why this product is a better choice"
+    }
+  ]
 }
 `;
 
@@ -206,6 +214,29 @@ You MUST respond strictly with a valid JSON object matching the following struct
                 <p class="text-sm text-on-surface-variant leading-relaxed italic">${data.better_alternative}</p>
             `;
             resultsContainer.appendChild(altDiv);
+        }
+
+        // Add Good Products block if present
+        if (data.good_products && data.good_products.length > 0) {
+            const productsDiv = document.createElement('div');
+            productsDiv.className = "mt-6 p-6 bg-surface-container-lowest rounded-2xl";
+            productsDiv.innerHTML = `
+                <h4 class="font-headline font-bold text-lg mb-4 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary text-xl">verified_user</span> Healthier Products To Try
+                </h4>
+                <div class="space-y-3">
+                    ${data.good_products.map(p => `
+                        <div class="flex items-start gap-3 p-3 bg-surface-container rounded-xl">
+                            <span class="material-symbols-outlined text-primary mt-0.5 text-base" style="font-variation-settings: 'FILL' 1;">grade</span>
+                            <div>
+                                <p class="font-semibold text-sm text-on-surface">${p.name}</p>
+                                <p class="text-xs text-on-surface-variant mt-0.5">${p.reason}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            resultsContainer.appendChild(productsDiv);
         }
     }
 
